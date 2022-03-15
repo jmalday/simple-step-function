@@ -1,0 +1,55 @@
+service: simple-step-function
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  lambdaHashingVersion: 20201221
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "states:StartExecution"
+      Resource:
+        - "*"
+
+resources:
+  Outputs:
+    AwaitStateMachine:
+      Value:
+        Ref: MyStateMachine
+
+functions:
+  startExecution:
+    handler: handler.start
+    environment:
+      STATE_MACHINE_ARN: ${self:resources.Outputs.AwaitStateMachine.Value}
+      AWAIT_TIME: 20
+    events:
+        - http:
+            path: start
+            method: POST
+            cors: true      
+  resolver:
+    handler: handler.resolver
+
+stepFunctions:
+  stateMachines:
+    awaitStateMachine:
+      name: MyStateMachine
+      definition:
+        Comment: "Await State Machine"
+        StartAt: AwaitState
+        States:
+          AwaitState:
+            Type: Wait
+            SecondsPath: $.waitTime
+            Next: ResolveState
+          ResolveState:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [resolver, Arn]
+            End: true
+
+
+
+plugins:
+  - serverless-step-functions
